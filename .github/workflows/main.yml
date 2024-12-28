@@ -1,6 +1,6 @@
 name: Cl
 
-on: 
+on:
   [push, workflow_dispatch]
 
 jobs:
@@ -32,13 +32,33 @@ jobs:
         Start-Process -NoNewWindow -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389" 
         Start-Sleep -Seconds 5  # Give ngrok time to establish the tunnel
 
-    - name: Retrieve ngrok Public URL
+    - name: Retrieve ngrok Public URL with Retry
       run: |
-        # Query ngrok's API for the public URL (works via localhost:4040)
-        $ngrokData = Invoke-RestMethod -Uri http://localhost:4040/api/tunnels
-        $ngrokUrl = $ngrokData.tunnels | Where-Object {$_.proto -eq 'tcp'} | Select-Object -ExpandProperty public_url
-        Write-Output "The RDP public URL is: $ngrokUrl"
+        $maxRetries = 10
+        $retryInterval = 5  # seconds
+        $attempts = 0
+        $ngrokUrl = ""
+
+        # Retry logic
+        while ($attempts -lt $maxRetries -and !$ngrokUrl) {
+          try {
+            $ngrokData = Invoke-RestMethod -Uri http://localhost:4040/api/tunnels
+            $ngrokUrl = $ngrokData.tunnels | Where-Object {$_.proto -eq 'tcp'} | Select-Object -ExpandProperty public_url
+          } catch {
+            Write-Output "ngrok API not available yet. Retrying..."
+            $attempts++
+            Start-Sleep -Seconds $retryInterval
+          }
+        }
+
+        # Output result
+        if ($ngrokUrl) {
+          Write-Output "The RDP public URL is: $ngrokUrl"
+        } else {
+          Write-Output "Failed to retrieve ngrok public URL after $maxRetries attempts."
+          exit 1
+        }
 
     - name: Output ngrok URL
       run: |
-        echo "The public ngrok URL for RDP access is: ${{ steps.retrieve_ngrok_url.outputs.url }}"
+        echo "The public ngrok URL for RDP access is: $ngrokUrl"
