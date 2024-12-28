@@ -1,25 +1,43 @@
 name: Cl
 
-on: [push, workflow_dispatch]
+on: 
+  [push, workflow_dispatch]
 
 jobs:
   build:
-
     runs-on: windows-latest
 
     steps:
-    - name: Download
+    - name: Download ngrok
       run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-    - name: Extract
+
+    - name: Extract ngrok
       run: Expand-Archive ngrok.zip
-    - name: Auth
+
+    - name: Authenticate ngrok
       run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-    - name: Enable TS
-      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
-    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-    - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
-    - name: Create Tunnel
-      run: .\ngrok\ngrok.exe tcp 3389
+
+    - name: Enable Remote Desktop
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
+
+    - name: Create ngrok Tunnel for RDP
+      run: .\ngrok\ngrok.exe tcp 3389 --log=stdout > ngrok_log.txt 2>&1 &
+      
+    - name: Get ngrok Public URL
+      run: |
+        # Wait a few seconds for ngrok to initialize and start tunneling
+        Start-Sleep -Seconds 5
+        # Extract public URL from ngrok's API
+        $ngrok_url = Invoke-RestMethod -Uri http://localhost:4040/api/tunnels | Select-Object -ExpandProperty tunnels | Where-Object {$_.proto -eq 'tcp'} | Select-Object -ExpandProperty public_url
+        Write-Output "ngrok RDP URL: $ngrok_url"
+      
+    - name: Output ngrok URL
+      run: |
+        # Display the public URL of the RDP service exposed via ngrok
+        Write-Output "The RDP URL is: $ngrok_url"
