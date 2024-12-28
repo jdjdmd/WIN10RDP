@@ -26,18 +26,19 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
         Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
 
-    - name: Create ngrok Tunnel for RDP
-      run: .\ngrok\ngrok.exe tcp 3389 --log=stdout > ngrok_log.txt 2>&1 &
-      
-    - name: Get ngrok Public URL
+    - name: Start ngrok Tunnel for RDP
       run: |
-        # Wait a few seconds for ngrok to initialize and start tunneling
-        Start-Sleep -Seconds 5
-        # Extract public URL from ngrok's API
-        $ngrok_url = Invoke-RestMethod -Uri http://localhost:4040/api/tunnels | Select-Object -ExpandProperty tunnels | Where-Object {$_.proto -eq 'tcp'} | Select-Object -ExpandProperty public_url
-        Write-Output "ngrok RDP URL: $ngrok_url"
-      
+        # Start ngrok tunnel in the background
+        Start-Process -NoNewWindow -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389" 
+        Start-Sleep -Seconds 5  # Give ngrok time to establish the tunnel
+
+    - name: Retrieve ngrok Public URL
+      run: |
+        # Query ngrok's API for the public URL (works via localhost:4040)
+        $ngrokData = Invoke-RestMethod -Uri http://localhost:4040/api/tunnels
+        $ngrokUrl = $ngrokData.tunnels | Where-Object {$_.proto -eq 'tcp'} | Select-Object -ExpandProperty public_url
+        Write-Output "The RDP public URL is: $ngrokUrl"
+
     - name: Output ngrok URL
       run: |
-        # Display the public URL of the RDP service exposed via ngrok
-        Write-Output "The RDP URL is: $ngrok_url"
+        echo "The public ngrok URL for RDP access is: ${{ steps.retrieve_ngrok_url.outputs.url }}"
