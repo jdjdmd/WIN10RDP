@@ -14,9 +14,9 @@ jobs:
     - name: Extract ngrok
       run: Expand-Archive ngrok.zip
 
-    - name: Save Auth Token to File
+    - name: Print Auth Token
       run: |
-        echo $Env:NGROK_AUTH_TOKEN | Out-File -FilePath authtoken.txt -Encoding ascii
+        Write-Host "NGROK Auth Token: $Env:NGROK_AUTH_TOKEN"
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
